@@ -53,7 +53,6 @@ export const HomeView: FC = () => {
 // Keep the name `GameSandbox` and the `FC` type.
 
 
-
 const GameSandbox: FC = () => {
   type EnemyType = 'bot' | 'scam' | 'jupiter' | 'firedancer' | 'whale' | 'validator' | 'tensor' | 'raydium' | 'boss';
   
@@ -76,11 +75,13 @@ const GameSandbox: FC = () => {
     levelBg: number;
     levelIntroStart: number;
     ball: Ball;
+    shieldActive: boolean;
+    shieldPower: number;
   }
 
   const audioCtx = useRef<AudioContext | null>(null);
 
-  const playSound = (type: 'shoot' | 'explosion' | 'hit' | 'levelup' | 'bounce') => {
+  const playSound = (type: 'shoot' | 'explosion' | 'hit' | 'levelup' | 'bounce' | 'shield') => {
     try {
       if (!audioCtx.current) audioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       const ctx = audioCtx.current;
@@ -103,6 +104,12 @@ const GameSandbox: FC = () => {
         osc.frequency.exponentialRampToValueAtTime(600, now + 0.05);
         gain.gain.setValueAtTime(0.1, now);
         osc.start(); osc.stop(now + 0.05);
+      } else if (type === 'shield') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+        gain.gain.setValueAtTime(0.05, now);
+        osc.start(); osc.stop(now + 0.1);
       } else if (type === 'explosion') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(150, now);
@@ -130,7 +137,9 @@ const GameSandbox: FC = () => {
     showPauseMenu: false,
     fireRateLevel: 1, damageLevel: 1,
     levelBg: 0, levelIntroStart: 0,
-    ball: { x: 50, y: 70, dx: 0, dy: 0, active: false, missedCount: 0 }
+    ball: { x: 50, y: 70, dx: 0, dy: 0, active: false, missedCount: 0 },
+    shieldActive: false,
+    shieldPower: 100
   };
 
   const levelConfigs = [
@@ -188,6 +197,8 @@ const GameSandbox: FC = () => {
         levelIntroStart: action.now,
         enemies: [], enemyBullets: [], bullets: [], explosions: [],
         ball: newLevel >= 6 ? { x: 50, y: 70, dx: 0.45, dy: -0.45, active: true, missedCount: 0 } : state.ball,
+        shieldPower: 100,
+        shieldActive: false
       };
     }
 
@@ -196,7 +207,9 @@ const GameSandbox: FC = () => {
         ...state,
         levelIntroStart: action.now,
         enemies: [], enemyBullets: [], bullets: [], explosions: [],
-        ball: state.level >= 6 ? { x: 50, y: 70, dx: 0.45, dy: -0.45, active: true, missedCount: 0 } : { ...state.ball, active: false }
+        ball: state.level >= 6 ? { x: 50, y: 70, dx: 0.45, dy: -0.45, active: true, missedCount: 0 } : { ...state.ball, active: false },
+        shieldPower: 100,
+        shieldActive: false
       };
     }
 
@@ -204,10 +217,19 @@ const GameSandbox: FC = () => {
     if (state.showPauseMenu) return state;
 
     const now = action.now;
-    let { bullets, enemies, enemyBullets, explosions, ball } = state;
+    let { bullets, enemies, enemyBullets, explosions, ball, shieldActive, shieldPower, lives } = state;
     let addedScore = 0;
-    let playerHitCount = 0;
+    
     const playerX = Math.max(12, Math.min(88, state.playerX * 0.8 + state.playerTargetX * 0.2));
+
+    // Shield Logic
+    if (action.isInteracting && shieldPower > 0) {
+      shieldActive = true;
+      shieldPower = Math.max(0, shieldPower - 0.7);
+    } else {
+      shieldActive = false;
+      shieldPower = Math.min(100, shieldPower + 0.3);
+    }
 
     if (state.levelIntroStart > 0) {
       if (now - state.levelIntroStart >= 5000) {
@@ -221,9 +243,9 @@ const GameSandbox: FC = () => {
             newEnemies.push({ id: now + i, x: 10 + (i % 10) * 9, y: 10 + Math.floor(i / 10) * 7.5, type, hp: configs[type].hp + Math.floor((state.level - 1) / 2), maxHp: configs[type].hp + Math.floor((state.level - 1) / 2), size: configs[type].size, lastShoot: now - 3000, shootChance: isArkanoidLevel ? 0 : cfg.shootChance });
           }
         }
-        return { ...state, levelIntroStart: 0, enemies: newEnemies, playerX };
+        return { ...state, levelIntroStart: 0, enemies: newEnemies, playerX, shieldActive, shieldPower };
       }
-      return { ...state, playerX };
+      return { ...state, playerX, shieldActive, shieldPower };
     }
 
     if (ball.active) {
@@ -234,7 +256,7 @@ const GameSandbox: FC = () => {
       if (ball.y > 80 && ball.y < 85 && Math.abs(ball.x - playerX) < 10) { ball.dy = -Math.abs(ball.dy); ball.dx = (ball.x - playerX) * 0.08; action.playSfx('bounce'); }
       if (ball.y > 105) { 
         ball.missedCount += 1;
-        if (ball.missedCount >= 2) { playerHitCount++; ball.missedCount = 0; action.playSfx('hit'); }
+        if (ball.missedCount >= 2) { lives--; ball.missedCount = 0; action.playSfx('hit'); }
         ball.x = playerX; ball.y = 70; ball.dy = -0.45; 
       }
     }
@@ -244,9 +266,15 @@ const GameSandbox: FC = () => {
 
     const survivingEnemyBullets: EnemyBullet[] = [];
     for (const eb of enemyBullets) {
-      if (Math.abs(eb.x - playerX) < 8 && eb.y > 78 && eb.y < 94) {
-        explosions.push({ id: now + Math.random(), x: playerX, y: 86, life: 35 });
-        playerHitCount++; action.playSfx('hit');
+      const isColliding = Math.abs(eb.x - playerX) < 8 && eb.y > 78 && eb.y < 94;
+      if (isColliding) {
+        if (shieldActive) {
+          action.playSfx('shield');
+          explosions.push({ id: now + Math.random(), x: eb.x, y: eb.y, life: 12 });
+        } else {
+          explosions.push({ id: now + Math.random(), x: playerX, y: 86, life: 35 });
+          lives--; action.playSfx('hit');
+        }
       } else survivingEnemyBullets.push(eb);
     }
     enemyBullets = survivingEnemyBullets;
@@ -282,30 +310,34 @@ const GameSandbox: FC = () => {
         bullets = remainingBullets;
     }
 
-    return { ...state, playerX, bullets, enemyBullets, enemies: workEnemies, explosions: state.explosions.map(e => ({ ...e, life: e.life - 1.8 })).filter(e => e.life > 0), ball, score: state.score + addedScore, lives: Math.max(0, state.lives - playerHitCount) };
+    return { ...state, playerX, bullets, enemyBullets, enemies: workEnemies, explosions: state.explosions.map(e => ({ ...e, life: e.life - 1.8 })).filter(e => e.life > 0), ball, score: state.score + addedScore, lives: Math.max(0, lives), shieldActive, shieldPower };
   };
 
   const [gameState, setGameState] = useState<'ready' | 'playing' | 'over' | 'levelComplete'>('ready');
   const [game, dispatch] = useReducer(gameReducer, initialGame);
+  const [isInteracting, setIsInteracting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const startGame = useCallback(() => { dispatch({ type: 'reset' }); dispatch({ type: 'startLevel', now: performance.now() }); setGameState('playing'); playSound('levelup'); }, []);
   const startNextLevel = useCallback(() => { dispatch({ type: 'nextLevel', now: performance.now() }); setGameState('playing'); playSound('levelup'); }, []);
 
-  const handleGlobalClick = useCallback((e: React.PointerEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
+    setIsInteracting(true);
     if (gameState === 'over') startGame();
     else if (gameState === 'levelComplete') startNextLevel();
     else if (gameState === 'playing') dispatch({ type: 'fire', playSfx: playSound });
-  }, [gameState, startGame, startNextLevel]);
+  };
+
+  const handlePointerUp = () => setIsInteracting(false);
 
   useEffect(() => {
     if (gameState === 'playing' && !game.showPauseMenu) {
-      const tick = (now: number) => { dispatch({ type: 'tick', now, playSfx: playSound }); raf = requestAnimationFrame(tick); };
+      const tick = (now: number) => { dispatch({ type: 'tick', now, playSfx: playSound, isInteracting }); raf = requestAnimationFrame(tick); };
       let raf = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(raf);
     }
-  }, [gameState, game.showPauseMenu]);
+  }, [gameState, game.showPauseMenu, isInteracting]);
 
   useEffect(() => {
     if (game.lives <= 0 && gameState === 'playing') { setGameState('over'); playSound('hit'); }
@@ -316,8 +348,7 @@ const GameSandbox: FC = () => {
   const countdown = Math.max(0, 5 - Math.floor((performance.now() - game.levelIntroStart) / 1000));
 
   return (
-    <div className="w-full h-full bg-black overflow-hidden flex flex-col relative select-none touch-none font-sans" onPointerDown={handleGlobalClick}>
-      {/* HUD */}
+    <div className="w-full h-full bg-black overflow-hidden flex flex-col relative select-none touch-none font-sans" onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp}>
       <div className="bg-black/90 p-3 text-white border-b border-emerald-500/50 z-[100] relative shrink-0">
         <div className="flex justify-between items-start mb-1">
           <div className="text-xl font-black bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 bg-clip-text text-transparent uppercase italic">
@@ -336,6 +367,9 @@ const GameSandbox: FC = () => {
           <span className="truncate">SOL: <span className="text-yellow-400">{game.solPoints}</span></span>
           <span className="flex justify-end overflow-hidden">{'❤️'.repeat(game.lives)}</span>
         </div>
+        <div className="mt-2 w-full h-1.5 bg-emerald-950 rounded-full overflow-hidden border border-emerald-500/20">
+            <div className={`h-full transition-all duration-100 ${game.shieldPower < 30 ? 'bg-red-500 shadow-[0_0_8px_red]' : 'bg-cyan-400 shadow-[0_0_8px_cyan]'}`} style={{ width: `${game.shieldPower}%` }}></div>
+        </div>
       </div>
 
       <div ref={containerRef} className="flex-1 relative cursor-none" onPointerMove={(e) => {
@@ -348,7 +382,16 @@ const GameSandbox: FC = () => {
           </div>
         )}
         {game.explosions.map(exp => <div key={exp.id} className="absolute w-12 h-12 pointer-events-none z-20 bg-gradient-to-tr from-orange-600 to-yellow-400 rounded-full blur-sm" style={{ left: `${exp.x - 6}%`, top: `${exp.y - 6}%`, opacity: exp.life / 50, transform: `scale(${0.8 + (42 - exp.life) / 20})` }} />)}
-        <div className="absolute w-14 h-10 bg-gradient-to-b from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center text-3xl z-30 shadow-lg shadow-emerald-900/50" style={{ left: `${game.playerX - 7}%`, top: '82%' }}>🚀</div>
+        
+        <div className="absolute w-14 h-10 z-30 flex items-center justify-center" style={{ left: `${game.playerX - 7}%`, top: '82%' }}>
+            <div className="relative w-full h-full bg-gradient-to-b from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center text-3xl shadow-lg shadow-emerald-900/50">
+                🚀
+                {game.shieldActive && (
+                    <div className="absolute inset-[-18px] border-[4px] border-cyan-400 rounded-full animate-pulse opacity-70 shadow-[0_0_25px_cyan]"></div>
+                )}
+            </div>
+        </div>
+
         {game.bullets.map(b => <div key={b.id} className="absolute w-1.5 h-6 bg-cyan-400 rounded-full z-40 shadow-[0_0_8px_cyan]" style={{ left: `${b.x - 0.75}%`, top: `${b.y}%` }} />)}
         {game.enemyBullets.map(eb => <div key={eb.id} className="absolute w-2 h-5 bg-red-500 rounded z-25 shadow-[0_0_8px_red]" style={{ left: `${eb.x - 1}%`, top: `${eb.y}%` }} />)}
         {game.enemies.map(e => (
@@ -359,14 +402,13 @@ const GameSandbox: FC = () => {
         ))}
       </div>
 
-      {/* MISSION BRIEF: READY SCREEN */}
       {gameState === 'ready' && (
         <div className="absolute inset-x-0 bottom-0 top-[68px] bg-black/60 flex flex-col items-center justify-center z-[90] p-6 text-center text-white backdrop-blur-sm">
           <div className="bg-black/95 p-6 rounded-[28px] w-full max-w-[290px] border border-emerald-500/30 shadow-2xl space-y-5">
             <div className="text-xl font-black text-emerald-400 uppercase tracking-tighter border-b border-emerald-500/20 pb-2">SOLANA DEFENDER</div>
             <div className="space-y-3 text-left text-[12px] text-gray-300">
-              <p>🛡️ <span className="text-white font-bold">TASK:</span> Purge the bots and secure the chain.</p>
-              <p>🕹️ <span className="text-white font-bold">MOVE:</span> Slide finger to control the pod.</p>
+              <p>🛡️ <span className="text-white font-bold">JUPITER SHIELD:</span> Hold press to activate shield (drains meter).</p>
+              <p>🚀 <span className="text-white font-bold">LASERS:</span> Tap to fire at bots.</p>
               <p>💎 <span className="text-white font-bold">REWARD:</span> Earn SOL for every block secured.</p>
             </div>
             <button onClick={startGame} className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm rounded-xl shadow-[0_3px_0_rgb(5,150,105)] active:translate-y-0.5 active:shadow-none transition-all uppercase tracking-widest">INITIALIZE</button>
@@ -374,87 +416,37 @@ const GameSandbox: FC = () => {
         </div>
       )}
 
-      {/* OVERLAY: LEVEL COMPLETE (Enhanced Fun & Learning) */}
       {gameState === 'levelComplete' && (
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[110] p-6 text-center text-white backdrop-blur-md">
           <div className="bg-gradient-to-b from-emerald-950/80 to-black p-1 rounded-[32px] border border-emerald-400/30 shadow-[0_0_50px_rgba(16,185,129,0.3)] w-full max-w-[340px]">
             <div className="bg-black/40 px-6 py-8 rounded-[28px] flex flex-col items-center gap-5">
-              
               <div className="relative">
-                <div className="absolute inset-0 bg-emerald-400 blur-2xl opacity-20 animate-pulse"></div>
                 <div className="text-5xl mb-2">🎉</div>
-                <div className="text-3xl font-black text-white uppercase tracking-tighter italic">
-                  BLOCK <span className="text-emerald-400">#{(1000 + game.level).toString()}</span>
-                </div>
-                <div className="text-[10px] font-bold text-emerald-500 uppercase tracking-[0.2em]">Validated Successfully</div>
+                <div className="text-3xl font-black text-white uppercase tracking-tighter italic">BLOCK <span className="text-emerald-400">#{(1000 + game.level).toString()}</span></div>
               </div>
-
-              <div className="w-full space-y-4">
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-left">
-                  <div className="text-[9px] text-yellow-500 font-bold uppercase mb-1 tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span> Pro-Tip
-                  </div>
-                  <p className="text-[11px] text-gray-300 leading-snug italic">"{levelConfig.fact}"</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 text-left">
-                  <div className="text-[9px] text-emerald-400 font-bold uppercase mb-1 tracking-widest">Did You Know?</div>
-                  <p className="text-[11px] text-emerald-200/80 leading-snug">{levelConfig.learn}</p>
-                </div>
+              <div className="w-full space-y-4 text-left text-xs text-gray-300 italic">
+                <div className="p-3 bg-white/5 rounded-xl border border-white/10">"{levelConfig.fact}"</div>
+                <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10 text-emerald-200/80 leading-snug">{levelConfig.learn}</div>
               </div>
-
-              <button 
-                onClick={startNextLevel} 
-                className="w-full group relative flex items-center justify-center gap-3 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black rounded-2xl uppercase text-sm transition-all shadow-[0_5px_0_rgb(5,150,105)] active:translate-y-1 active:shadow-none"
-              >
-                <span>MINT NEXT BLOCK</span>
-                <span className="group-hover:translate-x-1 transition-transform">➡</span>
-              </button>
+              <button onClick={startNextLevel} className="w-full py-4 bg-emerald-500 text-black font-black rounded-2xl uppercase text-sm shadow-[0_5px_0_rgb(5,150,105)] active:translate-y-1 active:shadow-none">MINT NEXT BLOCK</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* OVERLAY: GAME OVER (Halted Theme) */}
       {gameState === 'over' && (
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[120] text-white p-6 text-center backdrop-blur-md">
-          <div className="bg-gradient-to-b from-red-900/40 to-black p-1 rounded-[32px] border border-red-500/40 shadow-[0_0_60px_rgba(239,68,68,0.2)] w-full max-w-[320px]">
+          <div className="bg-gradient-to-b from-red-900/40 to-black p-1 rounded-[32px] border border-red-500/40 w-full max-w-[320px]">
             <div className="bg-black/60 px-6 py-10 rounded-[28px] flex flex-col items-center gap-6">
-              
-              <div className="relative">
-                <div className="absolute inset-0 bg-red-600 blur-3xl opacity-30 animate-pulse"></div>
-                <div className="text-6xl mb-2">🔌</div>
-                <div className="text-3xl font-black text-white uppercase tracking-tighter leading-none italic">
-                  NETWORK <span className="text-red-500">HALTED</span>
-                </div>
-                <div className="text-[10px] font-bold text-red-500/80 uppercase mt-2 tracking-widest">Consensus Lost</div>
-              </div>
-
-              <div className="w-full space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
-                    <div className="text-[9px] text-gray-400 font-bold uppercase mb-1 tracking-widest">FINAL SCORE</div>
-                    <div className="text-xl font-black text-white">{game.score.toLocaleString()}</div>
-                  </div>
-                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-center">
-                    <div className="text-[9px] text-yellow-500 font-bold uppercase mb-1 tracking-widest">SOL EARNED</div>
-                    <div className="text-xl font-black text-white">{game.solPoints}</div>
-                  </div>
-                </div>
-              </div>
-
-              <button 
-                onClick={startGame} 
-                className="w-full relative flex items-center justify-center gap-3 px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-black rounded-2xl uppercase text-sm transition-all shadow-[0_5px_0_rgb(153,27,27)] active:translate-y-1 active:shadow-none"
-              >
-                <span>REBOOT CLUSTER</span>
-              </button>
+              <div className="text-6xl mb-2">🔌</div>
+              <div className="text-3xl font-black text-white uppercase tracking-tighter leading-none italic">NETWORK <span className="text-red-500">HALTED</span></div>
+              <div className="text-xl font-black">SCORE: {game.score.toLocaleString()}</div>
+              <button onClick={startGame} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-sm shadow-[0_5px_0_rgb(153,27,27)] active:translate-y-1 active:shadow-none">REBOOT CLUSTER</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* LEVEL INTRO */}
       {game.levelIntroStart > 0 && (
         <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center z-[130] text-white p-8 text-center">
           <div className="text-2xl font-black text-emerald-400 mb-2 uppercase tracking-widest">LEVEL {game.level}</div>
@@ -463,7 +455,6 @@ const GameSandbox: FC = () => {
         </div>
       )}
 
-      {/* PAUSE MENU */}
       {game.showPauseMenu && (
         <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-[200] backdrop-blur-sm">
           <div className="text-4xl font-black text-emerald-400 italic mb-8 uppercase tracking-tighter">NODE PAUSED</div>
