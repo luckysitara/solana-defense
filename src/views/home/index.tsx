@@ -53,8 +53,7 @@ export const HomeView: FC = () => {
 // Keep the name `GameSandbox` and the `FC` type.
 
 
-
-    const GameSandbox: FC = () => {
+const GameSandbox: FC = () => {
   type EnemyType = 'bot' | 'scam' | 'jupiter' | 'firedancer' | 'whale' | 'validator' | 'tensor' | 'raydium' | 'boss';
   
   interface Bullet { id: number; x: number; y: number; damage: number; }
@@ -77,7 +76,7 @@ export const HomeView: FC = () => {
     levelBg: number;
     levelIntroStart: number;
     ball: Ball;
-    shieldTime: number; // Duration of active shield in ms
+    shieldTime: number;
     shieldDrops: ShieldDrop[];
   }
 
@@ -139,16 +138,16 @@ export const HomeView: FC = () => {
   };
 
   const levelConfigs = [
-    { enemies: ['bot'], count: 25, shootChance: 0.002, bg: 0, title: 'MEV Bot Swarm', fact: "MEV Bots often front-run users.", learn: "Using RPC providers like Helius helps you stay ahead." },
-    { enemies: ['scam'], count: 30, shootChance: 0.003, bg: 1, title: 'The Rug-Pull Flood', fact: "Scam tokens use 'mint-extensions'.", learn: "Jupiter Shield flags high-risk tokens." },
-    { enemies: ['firedancer'], count: 35, shootChance: 0.004, bg: 2, title: 'Firedancer Stress Test', fact: "Solana is moving towards 1M TPS.", learn: "Firedancer maximizes hardware efficiency." },
-    { enemies: ['whale'], count: 40, shootChance: 0.005, bg: 3, title: 'Liquidity Whales', fact: "Whales can impact the price.", learn: "DCA helps you enter positions smoothly." },
-    { enemies: ['tensor', 'raydium'], count: 45, shootChance: 0.006, bg: 0, title: 'Congestion Crisis', fact: "Priority fees help land transactions.", learn: "Small fees prioritize your block space." },
-    { enemies: ['bot', 'scam', 'jupiter'], count: 40, shootChance: 0, bg: 1, title: 'ARKANOID PROTOCOL', fact: "When the UI fails, the protocol remains.", learn: "Your keys, your crypto. Use cold storage." },
-    { enemies: ['firedancer', 'validator'], count: 30, shootChance: 0, bg: 2, title: 'BLOCK PROPAGATION', fact: "Solana is a global state machine.", learn: "Proof of History acts like a clock." },
-    { enemies: ['raydium', 'whale'], count: 35, shootChance: 0, bg: 3, title: 'LIQUIDITY BOUNCE', fact: "Pools require balancing.", learn: "Concentrated liquidity earns more fees." },
-    { enemies: ['tensor', 'jupiter'], count: 40, shootChance: 0, bg: 0, title: 'AGGREGATOR STRESS', fact: "Jupiter finds routes across 100+ DEXs.", learn: "Routing saves you money on swaps." },
-    { enemies: ['boss'], count: 1, shootChance: 0.06, bg: 0, title: 'TOTAL OUTAGE', fact: "The Void is here.", learn: "Restoring requires 80%+ stake consensus." },
+    { enemies: ['bot'], count: 25, shootChance: 0.002, bg: 0, title: 'MEV Bot Swarm', fact: "MEV Bots often front-run users. Pro-Tip: Use Jito-Solana to get tips back as a staker!", learn: "Using RPC providers like Helius helps you stay ahead of public bot congestion." },
+    { enemies: ['scam'], count: 30, shootChance: 0.003, bg: 1, title: 'The Rug-Pull Flood', fact: "Scam tokens use 'mint-extensions' to steal funds. Pro-Tip: Always use Jupiter Shield or RugCheck.xyz before swapping!", learn: "Jupiter Shield automatically flags high-risk tokens to keep your wallet safe." },
+    { enemies: ['firedancer'], count: 35, shootChance: 0.004, bg: 2, title: 'Firedancer Stress Test', fact: "Solana is moving towards 1M TPS. Pro-Tip: Diversifying clients makes the chain unshakeable!", learn: "Firedancer is a new validator client written in C to maximize hardware efficiency." },
+    { enemies: ['whale'], count: 40, shootChance: 0.005, bg: 3, title: 'Liquidity Whales', fact: "Whales can impact the price with a single trade. Pro-Tip: Use Jupiter's Limit Orders or DCA to reduce price impact!", learn: "DCA (Dollar Cost Averaging) helps you enter positions without getting 'squeezed' by whales." },
+    { enemies: ['tensor', 'raydium'], count: 45, shootChance: 0.006, bg: 0, title: 'Congestion Crisis', fact: "DEX volume can spike during a bull run. Pro-Tip: Increase your Priority Fees slightly to land transactions faster!", learn: "Priority fees are tiny amounts of SOL paid to validators to prioritize your block space." },
+    { enemies: ['bot', 'scam', 'jupiter', 'firedancer', 'whale', 'validator', 'tensor', 'raydium'], count: 40, shootChance: 0, bg: 1, title: 'ARKANOID PROTOCOL', fact: "When the UI fails, the protocol remains. Pro-Tip: Keep your Seed Phrase offline!", learn: "Your keys, your crypto. Hardware wallets are the gold standard for security." },
+    { enemies: ['firedancer', 'validator'], count: 30, shootChance: 0, bg: 2, title: 'BLOCK PROPAGATION', fact: "Solana is a global state machine. Pro-Tip: Check status.solana.com for real-time health!", learn: "Solana's Proof of History (PoH) acts like a clock for the blockchain." },
+    { enemies: ['raydium', 'whale'], count: 35, shootChance: 0, bg: 3, title: 'LIQUIDITY BOUNCE', fact: "Pools require balancing. Pro-Tip: Meteora DLMMs are the next gen of liquidity!", learn: "Concentrated liquidity lets you earn more fees with less capital." },
+    { enemies: ['tensor', 'jupiter'], count: 40, shootChance: 0, bg: 0, title: 'AGGREGATOR STRESS', fact: "Aggregators find the best routes. Pro-Tip: Jupiter finds routes across 100+ DEXs!", learn: "Routing saves you money by finding paths you wouldn't see manually." },
+    { enemies: ['boss'], count: 1, shootChance: 0.06, bg: 0, title: 'TOTAL OUTAGE', fact: "The Void is here. Pro-Tip: Solana never truly stops, it just waits for consensus!", learn: "Restoring the network requires 80%+ of validator stake to agree on a snapshot." },
   ];
 
   const configs: Record<EnemyType, { hp: number; size: number; emoji: string }> = {
@@ -216,7 +215,6 @@ export const HomeView: FC = () => {
     
     const playerX = Math.max(12, Math.min(88, state.playerX * 0.8 + state.playerTargetX * 0.2));
 
-    // Shield Countdown
     if (shieldTime > 0) shieldTime = Math.max(0, shieldTime - 16);
 
     if (state.levelIntroStart > 0) {
@@ -236,7 +234,6 @@ export const HomeView: FC = () => {
       return { ...state, playerX, shieldTime };
     }
 
-    // Ball Logic
     if (ball.active) {
       ball.x += ball.dx; ball.y += ball.dy;
       if (ball.x < 2 || ball.x > 98) ball.dx *= -1;
@@ -249,12 +246,11 @@ export const HomeView: FC = () => {
       }
     }
 
-    // Shield Catch Logic
     const remainingDrops: ShieldDrop[] = [];
     for (const d of shieldDrops) {
         const newY = d.y + 0.8;
         if (Math.abs(d.x - playerX) < 8 && newY > 78 && newY < 88) {
-            shieldTime = 8000; // 8 Seconds
+            shieldTime = 8000;
             action.playSfx('shield-up');
         } else if (newY < 105) {
             remainingDrops.push({ ...d, y: newY });
@@ -272,7 +268,6 @@ export const HomeView: FC = () => {
         if (shieldTime > 0) {
           explosions.push({ id: now + Math.random(), x: eb.x, y: eb.y, life: 10 });
         } else {
-          explosions.push({ id: now + Math.random(), x: playerX, y: 86, life: 35 });
           lives--; action.playSfx('hit');
         }
       } else survivingEnemyBullets.push(eb);
@@ -286,7 +281,6 @@ export const HomeView: FC = () => {
             e.hp -= 20; ball.dy *= -1;
             if (e.hp <= 0) { 
                 addedScore += scoreMap[e.type]; 
-                explosions.push({ id: now + Math.random(), x: e.x, y: e.y, life: 40 }); 
                 if (Math.random() < 0.12) shieldDrops.push({ id: now + i, x: e.x, y: e.y });
                 workEnemies.splice(i, 1); i--; continue; 
             }
@@ -308,7 +302,6 @@ export const HomeView: FC = () => {
                     hit = true; e.hp -= b.damage;
                     if (e.hp <= 0) { 
                         addedScore += scoreMap[e.type]; 
-                        explosions.push({ id: now + Math.random(), x: e.x, y: e.y, life: 42 }); 
                         action.playSfx('explosion'); 
                         if (Math.random() < 0.12) shieldDrops.push({ id: now + Math.random(), x: e.x, y: e.y });
                         workEnemies.splice(i, 1); i--; 
@@ -356,18 +349,18 @@ export const HomeView: FC = () => {
 
   return (
     <div className="w-full h-full bg-black overflow-hidden flex flex-col relative select-none touch-none font-sans" onPointerDown={handlePointerDown}>
-      <div className="bg-black/90 p-3 text-white border-b border-emerald-500/50 z-[100] relative shrink-0">
+      <div className="bg-black/90 p-2 text-white border-b border-emerald-500/50 z-[100] relative shrink-0">
         <div className="flex justify-between items-start mb-1">
-          <div className="text-xl font-black bg-gradient-to-r from-emerald-400 to-emerald-500 bg-clip-text text-transparent uppercase italic">
+          <div className="text-lg font-black bg-gradient-to-r from-emerald-400 to-emerald-500 bg-clip-text text-transparent uppercase italic">
             SOLANA DEFENSE ₿🔒
           </div>
-          <button onClick={(e) => { e.stopPropagation(); dispatch({ type: 'togglePause' }); }} className="w-8 h-8 bg-emerald-500/20 rounded border border-emerald-500/40 text-emerald-400">{game.showPauseMenu ? '▶' : '||'}</button>
+          <button onClick={(e) => { e.stopPropagation(); dispatch({ type: 'togglePause' }); }} className="w-8 h-8 flex items-center justify-center bg-emerald-500/20 rounded border border-emerald-500/40 text-emerald-400 text-xs">{game.showPauseMenu ? '▶' : '||'}</button>
         </div>
-        <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-emerald-300 uppercase">
+        <div className="grid grid-cols-4 gap-1 text-[9px] font-bold text-emerald-300 uppercase">
           <span className="truncate">SCORE: <span className="text-green-400">{game.score}</span></span>
           <span>LVL: {game.level}</span>
           <span>SOL: {game.solPoints}</span>
-          <span className="text-right">{'❤️'.repeat(game.lives)}</span>
+          <span className="text-right whitespace-nowrap overflow-hidden">{'❤️'.repeat(game.lives)}</span>
         </div>
         {game.shieldTime > 0 && (
             <div className="mt-2 w-full h-1 bg-gray-800 rounded-full overflow-hidden">
@@ -378,53 +371,42 @@ export const HomeView: FC = () => {
 
       <div ref={containerRef} className="flex-1 relative cursor-none" onPointerMove={(e) => {
         const rect = containerRef.current?.getBoundingClientRect();
-        if (rect && gameState === 'playing' && !game.showPauseMenu) dispatch({ type: 'move', x: Math.max(12, Math.min(88, ((e.clientX - rect.left) / rect.width) * 100)) });
+        if (rect && gameState === 'playing' && !game.showPauseMenu) {
+            const clientX = (e as any).touches ? (e as any).touches[0].clientX : e.clientX;
+            dispatch({ type: 'move', x: Math.max(12, Math.min(88, ((clientX - rect.left) / rect.width) * 100)) });
+        }
       }}>
         {game.ball.active && (
-          <div className="absolute w-6 h-6 z-50 bg-white rounded-full shadow-[0_0_15px_white] flex items-center justify-center text-[10px] font-bold text-purple-600" style={{ left: `${game.ball.x - 3}%`, top: `${game.ball.y - 3}%` }}>◎</div>
+          <div className="absolute w-[6%] h-[3.4%] z-50 bg-white rounded-full shadow-[0_0_15px_white] flex items-center justify-center text-[10px] font-bold text-purple-600" style={{ left: `${game.ball.x - 3}%`, top: `${game.ball.y - 1.7}%` }}>◎</div>
         )}
 
         {game.shieldDrops.map(d => (
-            <div key={d.id} className="absolute w-10 h-10 animate-bounce flex items-center justify-center z-40" style={{ left: `${d.x - 5}%`, top: `${d.y - 5}%` }}>
-                <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_cyan] border-2 border-white text-lg">🪐</div>
+            <div key={d.id} className="absolute w-[10%] h-[5.6%] animate-bounce flex items-center justify-center z-40" style={{ left: `${d.x - 5}%`, top: `${d.y - 2.8}%` }}>
+                <div className="w-full h-full bg-cyan-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_cyan] border-2 border-white text-base">🪐</div>
             </div>
         ))}
 
-        <div className="absolute w-14 h-10 z-30 flex items-center justify-center" style={{ left: `${game.playerX - 7}%`, top: '82%' }}>
+        <div className="absolute w-[14%] h-[5%] z-30 flex items-center justify-center" style={{ left: `${game.playerX - 7}%`, top: '82%' }}>
             {game.shieldTime > 0 && (
-                <div className="absolute inset-[-15px] border-2 border-cyan-400 rounded-full animate-ping opacity-60 shadow-[0_0_20px_cyan]"></div>
+                <div className="absolute inset-[-50%] border-2 border-cyan-400 rounded-full animate-ping opacity-60 shadow-[0_0_20px_cyan]"></div>
             )}
-            <div className="text-3xl">🚀</div>
+            <div className="text-2xl">🚀</div>
         </div>
 
-        {game.bullets.map(b => <div key={b.id} className="absolute w-1 h-5 bg-cyan-400 rounded-full" style={{ left: `${b.x - 0.5}%`, top: `${b.y}%` }} />)}
-        {game.enemyBullets.map(eb => <div key={eb.id} className="absolute w-2 h-4 bg-red-500 rounded" style={{ left: `${eb.x - 1}%`, top: `${eb.y}%` }} />)}
+        {game.bullets.map(b => <div key={b.id} className="absolute w-[1%] h-[3%] bg-cyan-400 rounded-full" style={{ left: `${b.x - 0.5}%`, top: `${b.y}%` }} />)}
+        {game.enemyBullets.map(eb => <div key={eb.id} className="absolute w-[2%] h-[2.5%] bg-red-500 rounded" style={{ left: `${eb.x - 1}%`, top: `${eb.y}%` }} />)}
         {game.enemies.map(e => <div key={e.id} className="absolute flex flex-col items-center" style={{ left: `${e.x - e.size/2}%`, top: `${e.y - e.size/2}%`, width: `${e.size}%` }}>
-            <span className={e.type === 'boss' ? 'text-7xl' : 'text-3xl'}>{configs[e.type].emoji}</span>
+            <span className={e.type === 'boss' ? 'text-5xl' : 'text-2xl'}>{configs[e.type].emoji}</span>
             {e.type === 'boss' && <div className="w-full h-1 bg-red-500 mt-1" style={{ width: `${(e.hp / e.maxHp) * 100}%` }} />}
         </div>)}
-        {game.explosions.map(exp => <div key={exp.id} className="absolute w-10 h-10 bg-orange-500 rounded-full blur-md" style={{ left: `${exp.x - 5}%`, top: `${exp.y - 5}%`, opacity: exp.life / 42 }} />)}
+        {game.explosions.map(exp => <div key={exp.id} className="absolute w-[10%] h-[5.6%] bg-orange-500 rounded-full blur-md" style={{ left: `${exp.x - 5}%`, top: `${exp.y - 2.8}%`, opacity: exp.life / 42 }} />)}
       </div>
 
       {(gameState === 'ready' || gameState === 'over' || gameState === 'levelComplete') && (
-        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] p-6 text-center text-white">
-          <h2 className="text-4xl font-black mb-4 italic uppercase">
-            {gameState === 'ready' ? 'SOLANA DEFENDER' : gameState === 'over' ? 'NETWORK HALTED' : 'BLOCK SECURED'}
-          </h2>
-          <p className="text-emerald-400 font-bold mb-8 uppercase tracking-widest">
-            {gameState === 'ready' ? 'Catch falling Jupiters for shields' : `Score: ${game.score}`}
-          </p>
-          <button onClick={gameState === 'levelComplete' ? startNextLevel : startGame} className="w-full py-4 bg-emerald-500 text-black font-black rounded-xl uppercase shadow-[0_4px_0_rgb(5,150,105)]">
-            {gameState === 'ready' ? 'INITIALIZE' : gameState === 'levelComplete' ? 'NEXT BLOCK' : 'REBOOT'}
-          </button>
-        </div>
-      )}
-
-      {game.levelIntroStart > 0 && (
-        <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center z-[300] text-white p-8">
-          <div className="text-2xl font-black text-emerald-400 mb-2 uppercase">LEVEL {game.level}</div>
-          <div className="text-lg font-bold mb-4 uppercase text-gray-500">{levelConfig.title}</div>
-          <div className="text-6xl font-black text-yellow-400">{countdown || 'GO!'}</div>
+        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] p-6 text-center text-white backdrop-blur-sm">
+          <div className="bg-black/95 p-6 rounded-[28px] w-full max-w-[290px] border border-emerald-500/30 shadow-2xl space-y-5">
+          <div className="text-sm font-bold mb-4 uppercase text-gray-500 tracking-tighter">{levelConfig.title}</div>
+          <div className="text-5xl font-black text-yellow-400 animate-bounce">{countdown || 'GO!'}</div>
         </div>
       )}
     </div>
