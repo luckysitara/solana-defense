@@ -52,7 +52,6 @@ export const HomeView: FC = () => {
 // Replace this entire GameSandbox component with the one AI generates.
 // Keep the name `GameSandbox` and the `FC` type.
 
-
 const GameSandbox: FC = () => {
   type EnemyType = 'bot' | 'scam' | 'jupiter' | 'firedancer' | 'whale' | 'validator' | 'tensor' | 'raydium' | 'boss';
   
@@ -64,6 +63,7 @@ const GameSandbox: FC = () => {
   }
   interface Explosion { id: number; x: number; y: number; life: number; }
   interface Ball { x: number; y: number; dx: number; dy: number; active: boolean; missedCount: number; }
+  interface PowerUp { id: number; x: number; y: number; type: 'shield'; }
 
   interface Game {
     score: number; solPoints: number; level: number; lives: number;
@@ -75,13 +75,13 @@ const GameSandbox: FC = () => {
     levelBg: number;
     levelIntroStart: number;
     ball: Ball;
-    shieldActive: boolean;
-    shieldPower: number;
+    shieldTimeRemaining: number;
+    powerUps: PowerUp[];
   }
 
   const audioCtx = useRef<AudioContext | null>(null);
 
-  const playSound = (type: 'shoot' | 'explosion' | 'hit' | 'levelup' | 'bounce' | 'shield') => {
+  const playSound = (type: 'shoot' | 'explosion' | 'hit' | 'levelup' | 'bounce' | 'powerup') => {
     try {
       if (!audioCtx.current) audioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       const ctx = audioCtx.current;
@@ -98,18 +98,12 @@ const GameSandbox: FC = () => {
         osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
         gain.gain.setValueAtTime(0.05, now);
         osc.start(); osc.stop(now + 0.1);
-      } else if (type === 'bounce') {
+      } else if (type === 'powerup') {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(400, now);
-        osc.frequency.exponentialRampToValueAtTime(600, now + 0.05);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.2);
         gain.gain.setValueAtTime(0.1, now);
-        osc.start(); osc.stop(now + 0.05);
-      } else if (type === 'shield') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(200, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
-        gain.gain.setValueAtTime(0.05, now);
-        osc.start(); osc.stop(now + 0.1);
+        osc.start(); osc.stop(now + 0.2);
       } else if (type === 'explosion') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(150, now);
@@ -138,21 +132,21 @@ const GameSandbox: FC = () => {
     fireRateLevel: 1, damageLevel: 1,
     levelBg: 0, levelIntroStart: 0,
     ball: { x: 50, y: 70, dx: 0, dy: 0, active: false, missedCount: 0 },
-    shieldActive: false,
-    shieldPower: 100
+    shieldTimeRemaining: 0,
+    powerUps: []
   };
 
   const levelConfigs = [
-    { enemies: ['bot'], count: 25, shootChance: 0.002, bg: 0, title: 'MEV Bot Swarm', fact: "MEV Bots often front-run users. Pro-Tip: Use Jito-Solana to get tips back as a staker!", learn: "Using RPC providers like Helius helps you stay ahead of public bot congestion." },
-    { enemies: ['scam'], count: 30, shootChance: 0.003, bg: 1, title: 'The Rug-Pull Flood', fact: "Scam tokens use 'mint-extensions' to steal funds. Pro-Tip: Always use Jupiter Shield or RugCheck.xyz before swapping!", learn: "Jupiter Shield automatically flags high-risk tokens to keep your wallet safe." },
-    { enemies: ['firedancer'], count: 35, shootChance: 0.004, bg: 2, title: 'Firedancer Stress Test', fact: "Solana is moving towards 1M TPS. Pro-Tip: Diversifying clients makes the chain unshakeable!", learn: "Firedancer is a new validator client written in C to maximize hardware efficiency." },
-    { enemies: ['whale'], count: 40, shootChance: 0.005, bg: 3, title: 'Liquidity Whales', fact: "Whales can impact the price with a single trade. Pro-Tip: Use Jupiter's Limit Orders or DCA to reduce price impact!", learn: "DCA (Dollar Cost Averaging) helps you enter positions without getting 'squeezed' by whales." },
-    { enemies: ['tensor', 'raydium'], count: 45, shootChance: 0.006, bg: 0, title: 'Congestion Crisis', fact: "DEX volume can spike during a bull run. Pro-Tip: Increase your Priority Fees slightly to land transactions faster!", learn: "Priority fees are tiny amounts of SOL paid to validators to prioritize your block space." },
-    { enemies: ['bot', 'scam', 'jupiter', 'firedancer', 'whale', 'validator', 'tensor', 'raydium'], count: 40, shootChance: 0, bg: 1, title: 'ARKANOID PROTOCOL', fact: "When the UI fails, the protocol remains. Pro-Tip: Keep your Seed Phrase offline!", learn: "Your keys, your crypto. Hardware wallets are the gold standard for security." },
-    { enemies: ['firedancer', 'validator'], count: 30, shootChance: 0, bg: 2, title: 'BLOCK PROPAGATION', fact: "Solana is a global state machine. Pro-Tip: Check status.solana.com for real-time health!", learn: "Solana's Proof of History (PoH) acts like a clock for the blockchain." },
-    { enemies: ['raydium', 'whale'], count: 35, shootChance: 0, bg: 3, title: 'LIQUIDITY BOUNCE', fact: "Pools require balancing. Pro-Tip: Meteora DLMMs are the next gen of liquidity!", learn: "Concentrated liquidity lets you earn more fees with less capital." },
-    { enemies: ['tensor', 'jupiter'], count: 40, shootChance: 0, bg: 0, title: 'AGGREGATOR STRESS', fact: "Aggregators find the best routes. Pro-Tip: Jupiter finds routes across 100+ DEXs!", learn: "Routing saves you money by finding paths you wouldn't see manually." },
-    { enemies: ['boss'], count: 1, shootChance: 0.06, bg: 0, title: 'TOTAL OUTAGE', fact: "The Void is here. Pro-Tip: Solana never truly stops, it just waits for consensus!", learn: "Restoring the network requires 80%+ of validator stake to agree on a snapshot." },
+    { enemies: ['bot'], count: 25, shootChance: 0.002, bg: 0, title: 'MEV Bot Swarm', fact: "MEV Bots often front-run users.", learn: "Using RPC providers like Helius helps you stay ahead." },
+    { enemies: ['scam'], count: 30, shootChance: 0.003, bg: 1, title: 'The Rug-Pull Flood', fact: "Scam tokens use mint-extensions.", learn: "Jupiter Shield flags high-risk tokens." },
+    { enemies: ['firedancer'], count: 35, shootChance: 0.004, bg: 2, title: 'Firedancer Stress Test', fact: "Solana is moving towards 1M TPS.", learn: "Firedancer maximizes hardware efficiency." },
+    { enemies: ['whale'], count: 40, shootChance: 0.005, bg: 3, title: 'Liquidity Whales', fact: "Whales impact price with single trades.", learn: "Use Jupiter's DCA to reduce price impact." },
+    { enemies: ['tensor', 'raydium'], count: 45, shootChance: 0.006, bg: 0, title: 'Congestion Crisis', fact: "DEX volume spikes during runs.", learn: "Priority fees land transactions faster." },
+    { enemies: ['bot', 'scam', 'jupiter'], count: 40, shootChance: 0, bg: 1, title: 'ARKANOID PROTOCOL', fact: "UI fails, protocol remains.", learn: "Your keys, your crypto." },
+    { enemies: ['firedancer', 'validator'], count: 30, shootChance: 0, bg: 2, title: 'BLOCK PROPAGATION', fact: "Solana is a global state machine.", learn: "Proof of History is the network clock." },
+    { enemies: ['raydium', 'whale'], count: 35, shootChance: 0, bg: 3, title: 'LIQUIDITY BOUNCE', fact: "Pools require balancing.", learn: "Meteora DLMMs are next gen." },
+    { enemies: ['tensor', 'jupiter'], count: 40, shootChance: 0, bg: 0, title: 'AGGREGATOR STRESS', fact: "Aggregators find best routes.", learn: "Jupiter finds routes across 100+ DEXs." },
+    { enemies: ['boss'], count: 1, shootChance: 0.06, bg: 0, title: 'TOTAL OUTAGE', fact: "The Void is here.", learn: "Solana waits for consensus." },
   ];
 
   const configs: Record<EnemyType, { hp: number; size: number; emoji: string }> = {
@@ -180,9 +174,8 @@ const GameSandbox: FC = () => {
 
     if (action.type === 'fire') {
       if (state.showPauseMenu || state.levelIntroStart > 0 || isArkanoidLevel) return state;
-      const bulletDamage = 1.2 + state.damageLevel * 0.8;
       action.playSfx('shoot');
-      return { ...state, bullets: [...state.bullets, { id: Date.now() + Math.random(), x: state.playerX, y: 82, damage: bulletDamage }] };
+      return { ...state, bullets: [...state.bullets, { id: Date.now() + Math.random(), x: state.playerX, y: 82, damage: 2 }] };
     }
 
     if (action.type === 'nextLevel') {
@@ -191,25 +184,13 @@ const GameSandbox: FC = () => {
       return {
         ...state,
         level: newLevel,
-        lives: Math.min(state.lives + 2, 7),
+        lives: Math.min(state.lives + 1, 5),
         solPoints: state.solPoints + 50 * newLevel,
         levelBg: cfg.bg,
         levelIntroStart: action.now,
-        enemies: [], enemyBullets: [], bullets: [], explosions: [],
+        enemies: [], enemyBullets: [], bullets: [], explosions: [], powerUps: [],
         ball: newLevel >= 6 ? { x: 50, y: 70, dx: 0.45, dy: -0.45, active: true, missedCount: 0 } : state.ball,
-        shieldPower: 100,
-        shieldActive: false
-      };
-    }
-
-    if (action.type === 'startLevel') {
-      return {
-        ...state,
-        levelIntroStart: action.now,
-        enemies: [], enemyBullets: [], bullets: [], explosions: [],
-        ball: state.level >= 6 ? { x: 50, y: 70, dx: 0.45, dy: -0.45, active: true, missedCount: 0 } : { ...state.ball, active: false },
-        shieldPower: 100,
-        shieldActive: false
+        shieldTimeRemaining: 0
       };
     }
 
@@ -217,19 +198,12 @@ const GameSandbox: FC = () => {
     if (state.showPauseMenu) return state;
 
     const now = action.now;
-    let { bullets, enemies, enemyBullets, explosions, ball, shieldActive, shieldPower, lives } = state;
+    let { bullets, enemies, enemyBullets, explosions, ball, shieldTimeRemaining, lives, powerUps } = state;
     let addedScore = 0;
     
     const playerX = Math.max(12, Math.min(88, state.playerX * 0.8 + state.playerTargetX * 0.2));
 
-    // Shield Logic
-    if (action.isInteracting && shieldPower > 0) {
-      shieldActive = true;
-      shieldPower = Math.max(0, shieldPower - 0.7);
-    } else {
-      shieldActive = false;
-      shieldPower = Math.min(100, shieldPower + 0.3);
-    }
+    if (shieldTimeRemaining > 0) shieldTimeRemaining = Math.max(0, shieldTimeRemaining - 16);
 
     if (state.levelIntroStart > 0) {
       if (now - state.levelIntroStart >= 5000) {
@@ -240,39 +214,45 @@ const GameSandbox: FC = () => {
         } else {
           for (let i = 0; i < cfg.count; i++) {
             const type = cfg.enemies[Math.floor(Math.random() * cfg.enemies.length)] as EnemyType;
-            newEnemies.push({ id: now + i, x: 10 + (i % 10) * 9, y: 10 + Math.floor(i / 10) * 7.5, type, hp: configs[type].hp + Math.floor((state.level - 1) / 2), maxHp: configs[type].hp + Math.floor((state.level - 1) / 2), size: configs[type].size, lastShoot: now - 3000, shootChance: isArkanoidLevel ? 0 : cfg.shootChance });
+            newEnemies.push({ id: now + i, x: 10 + (i % 10) * 9, y: 10 + Math.floor(i / 10) * 7.5, type, hp: configs[type].hp, maxHp: configs[type].hp, size: configs[type].size, lastShoot: now - 3000, shootChance: isArkanoidLevel ? 0 : cfg.shootChance });
           }
         }
-        return { ...state, levelIntroStart: 0, enemies: newEnemies, playerX, shieldActive, shieldPower };
+        return { ...state, levelIntroStart: 0, enemies: newEnemies, playerX, shieldTimeRemaining };
       }
-      return { ...state, playerX, shieldActive, shieldPower };
+      return { ...state, playerX, shieldTimeRemaining };
     }
 
     if (ball.active) {
       ball.x += ball.dx; ball.y += ball.dy;
-      if (Math.abs(ball.dy) < 0.1) ball.dy = ball.dy < 0 ? -0.2 : 0.2;
-      if (ball.x < 2 || ball.x > 98) { ball.dx *= -1; action.playSfx('bounce'); }
-      if (ball.y < 2) { ball.dy = Math.abs(ball.dy); ball.dx += (Math.random() - 0.5) * 0.1; action.playSfx('bounce'); }
-      if (ball.y > 80 && ball.y < 85 && Math.abs(ball.x - playerX) < 10) { ball.dy = -Math.abs(ball.dy); ball.dx = (ball.x - playerX) * 0.08; action.playSfx('bounce'); }
-      if (ball.y > 105) { 
-        ball.missedCount += 1;
-        if (ball.missedCount >= 2) { lives--; ball.missedCount = 0; action.playSfx('hit'); }
-        ball.x = playerX; ball.y = 70; ball.dy = -0.45; 
-      }
+      if (ball.x < 2 || ball.x > 98) { ball.dx *= -1; }
+      if (ball.y < 2) { ball.dy = Math.abs(ball.dy); }
+      if (ball.y > 80 && ball.y < 85 && Math.abs(ball.x - playerX) < 10) { ball.dy = -Math.abs(ball.dy); ball.dx = (ball.x - playerX) * 0.08; }
+      if (ball.y > 105) { lives--; ball.x = playerX; ball.y = 70; ball.dy = -0.45; }
     }
 
     bullets = state.bullets.map(b => ({ ...b, y: b.y - 2.5 })).filter(b => b.y > -8);
     enemyBullets = state.enemyBullets.map(b => ({ ...b, y: b.y + 1.1 })).filter(b => b.y < 110);
+    powerUps = powerUps.map(p => ({ ...p, y: p.y + 0.6 })).filter(p => p.y < 110);
+
+    // Collect PowerUps
+    const activePowerUps: PowerUp[] = [];
+    for (const p of powerUps) {
+        if (Math.abs(p.x - playerX) < 10 && p.y > 78 && p.y < 88) {
+            shieldTimeRemaining = 8000;
+            action.playSfx('powerup');
+        } else {
+            activePowerUps.push(p);
+        }
+    }
+    powerUps = activePowerUps;
 
     const survivingEnemyBullets: EnemyBullet[] = [];
     for (const eb of enemyBullets) {
       const isColliding = Math.abs(eb.x - playerX) < 8 && eb.y > 78 && eb.y < 94;
       if (isColliding) {
-        if (shieldActive) {
-          action.playSfx('shield');
-          explosions.push({ id: now + Math.random(), x: eb.x, y: eb.y, life: 12 });
+        if (shieldTimeRemaining > 0) {
+          explosions.push({ id: now + Math.random(), x: eb.x, y: eb.y, life: 10 });
         } else {
-          explosions.push({ id: now + Math.random(), x: playerX, y: 86, life: 35 });
           lives--; action.playSfx('hit');
         }
       } else survivingEnemyBullets.push(eb);
@@ -283,14 +263,17 @@ const GameSandbox: FC = () => {
     for (let i = 0; i < workEnemies.length; i++) {
         const e = workEnemies[i];
         if (ball.active && Math.abs(ball.x - e.x) < e.size/2 && Math.abs(ball.y - e.y) < e.size/2) {
-            e.hp -= 20; ball.dy *= -1; action.playSfx('bounce');
-            if (e.hp <= 0) { addedScore += scoreMap[e.type]; explosions.push({ id: now + Math.random(), x: e.x, y: e.y, life: 40 }); workEnemies.splice(i, 1); i--; continue; }
+            e.hp -= 10; ball.dy *= -1;
+            if (e.hp <= 0) { 
+                addedScore += scoreMap[e.type]; 
+                explosions.push({ id: now + Math.random(), x: e.x, y: e.y, life: 30 }); 
+                workEnemies.splice(i, 1); i--; continue; 
+            }
         }
-        if (Math.random() < (state.level === 10 ? 0.06 : e.shootChance) && now - e.lastShoot > (state.level === 10 ? 500 : 3500)) {
-            enemyBullets.push({ id: now + Math.random(), x: e.x + (state.level === 10 ? (Math.random()*20-10) : 0), y: e.y + e.size / 2 });
+        if (Math.random() < e.shootChance && now - e.lastShoot > 3000) {
+            enemyBullets.push({ id: now + Math.random(), x: e.x, y: e.y });
             e.lastShoot = now;
         }
-        if (e.type === 'boss') e.x = 50 + Math.sin(now / 800) * 35;
     }
 
     if (!isArkanoidLevel) {
@@ -301,7 +284,13 @@ const GameSandbox: FC = () => {
                 const e = workEnemies[i];
                 if (Math.abs(b.x - e.x) < e.size/2 && Math.abs(b.y - e.y) < e.size/2) {
                     hit = true; e.hp -= b.damage;
-                    if (e.hp <= 0) { addedScore += scoreMap[e.type]; explosions.push({ id: now + Math.random(), x: e.x, y: e.y, life: 42 }); action.playSfx('explosion'); workEnemies.splice(i, 1); i--; }
+                    if (e.hp <= 0) { 
+                        addedScore += scoreMap[e.type]; 
+                        explosions.push({ id: now + Math.random(), x: e.x, y: e.y, life: 30 }); 
+                        action.playSfx('explosion');
+                        if (Math.random() < 0.15) powerUps.push({ id: now, x: e.x, y: e.y, type: 'shield' });
+                        workEnemies.splice(i, 1); i--; 
+                    }
                     break;
                 }
             }
@@ -310,160 +299,89 @@ const GameSandbox: FC = () => {
         bullets = remainingBullets;
     }
 
-    return { ...state, playerX, bullets, enemyBullets, enemies: workEnemies, explosions: state.explosions.map(e => ({ ...e, life: e.life - 1.8 })).filter(e => e.life > 0), ball, score: state.score + addedScore, lives: Math.max(0, lives), shieldActive, shieldPower };
+    return { ...state, playerX, bullets, enemyBullets, enemies: workEnemies, explosions: state.explosions.map(e => ({ ...e, life: e.life - 2 })).filter(e => e.life > 0), ball, score: state.score + addedScore, lives: Math.max(0, lives), shieldTimeRemaining, powerUps };
   };
 
   const [gameState, setGameState] = useState<'ready' | 'playing' | 'over' | 'levelComplete'>('ready');
   const [game, dispatch] = useReducer(gameReducer, initialGame);
-  const [isInteracting, setIsInteracting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const startGame = useCallback(() => { dispatch({ type: 'reset' }); dispatch({ type: 'startLevel', now: performance.now() }); setGameState('playing'); playSound('levelup'); }, []);
+  const startGame = useCallback(() => { dispatch({ type: 'reset' }); dispatch({ type: 'tick', now: performance.now() }); setGameState('playing'); playSound('levelup'); }, []);
   const startNextLevel = useCallback(() => { dispatch({ type: 'nextLevel', now: performance.now() }); setGameState('playing'); playSound('levelup'); }, []);
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    setIsInteracting(true);
-    if (gameState === 'over') startGame();
-    else if (gameState === 'levelComplete') startNextLevel();
-    else if (gameState === 'playing') dispatch({ type: 'fire', playSfx: playSound });
-  };
-
-  const handlePointerUp = () => setIsInteracting(false);
 
   useEffect(() => {
     if (gameState === 'playing' && !game.showPauseMenu) {
-      const tick = (now: number) => { dispatch({ type: 'tick', now, playSfx: playSound, isInteracting }); raf = requestAnimationFrame(tick); };
+      const tick = (now: number) => { dispatch({ type: 'tick', now, playSfx: playSound }); raf = requestAnimationFrame(tick); };
       let raf = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(raf);
     }
-  }, [gameState, game.showPauseMenu, isInteracting]);
+  }, [gameState, game.showPauseMenu]);
 
   useEffect(() => {
     if (game.lives <= 0 && gameState === 'playing') { setGameState('over'); playSound('hit'); }
     if (game.enemies.length === 0 && gameState === 'playing' && game.levelIntroStart === 0) { setGameState('levelComplete'); playSound('levelup'); }
   }, [game.lives, game.enemies.length, game.levelIntroStart, gameState]);
 
-  const levelConfig = levelConfigs[Math.min(game.level - 1, levelConfigs.length - 1)];
-  const countdown = Math.max(0, 5 - Math.floor((performance.now() - game.levelIntroStart) / 1000));
-
   return (
-    <div className="w-full h-full bg-black overflow-hidden flex flex-col relative select-none touch-none font-sans" onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp}>
-      <div className="bg-black/90 p-3 text-white border-b border-emerald-500/50 z-[100] relative shrink-0">
-        <div className="flex justify-between items-start mb-1">
-          <div className="text-xl font-black bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 bg-clip-text text-transparent uppercase italic">
-            SOLANA DEFENSE ₿🔒
+    <div className="w-full h-full bg-black overflow-hidden flex flex-col relative select-none touch-none" onPointerDown={() => gameState === 'playing' && dispatch({ type: 'fire', playSfx: playSound })}>
+      <div className="bg-slate-900/90 p-3 text-white border-b border-cyan-500/30 z-50">
+        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+          <div className="flex flex-col">
+            <span className="text-cyan-400">Score</span>
+            <span className="text-sm">{game.score.toLocaleString()}</span>
           </div>
-          <button 
-            onClick={(e) => { e.stopPropagation(); dispatch({ type: 'togglePause' }); }} 
-            className="w-8 h-8 bg-emerald-500/20 rounded flex items-center justify-center border border-emerald-500/40 text-emerald-400 active:bg-emerald-500/40"
-          >
-            {game.showPauseMenu ? '▶' : '||'}
-          </button>
-        </div>
-        <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-emerald-300">
-          <span className="truncate">SCORE: <span className="text-green-400 text-sm">{game.score.toLocaleString()}</span></span>
-          <span>LVL: {game.level}</span>
-          <span className="truncate">SOL: <span className="text-yellow-400">{game.solPoints}</span></span>
-          <span className="flex justify-end overflow-hidden">{'❤️'.repeat(game.lives)}</span>
-        </div>
-        <div className="mt-2 w-full h-1.5 bg-emerald-950 rounded-full overflow-hidden border border-emerald-500/20">
-            <div className={`h-full transition-all duration-100 ${game.shieldPower < 30 ? 'bg-red-500 shadow-[0_0_8px_red]' : 'bg-cyan-400 shadow-[0_0_8px_cyan]'}`} style={{ width: `${game.shieldPower}%` }}></div>
-        </div>
-      </div>
-
-      <div ref={containerRef} className="flex-1 relative cursor-none" onPointerMove={(e) => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (rect && gameState === 'playing' && !game.showPauseMenu) dispatch({ type: 'move', x: Math.max(12, Math.min(88, ((e.clientX - rect.left) / rect.width) * 100)) });
-      }}>
-        {game.ball.active && (
-          <div className="absolute w-6 h-6 z-50 flex items-center justify-center" style={{ left: `${game.ball.x - 3}%`, top: `${game.ball.y - 3}%` }}>
-            <div className="w-full h-full bg-white rounded-full shadow-[0_0_15px_white] animate-pulse text-[10px] font-bold text-purple-600 flex items-center justify-center">◎</div>
+          <div className="flex flex-col items-center">
+            <span className="text-purple-400">Level</span>
+            <span className="text-sm">{game.level}</span>
           </div>
+          <div className="flex gap-1 text-xs">{'❤️'.repeat(game.lives)}</div>
+        </div>
+        {game.shieldTimeRemaining > 0 && (
+            <div className="mt-2 w-full h-1 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-full bg-cyan-400 shadow-[0_0_10px_cyan]" style={{ width: `${(game.shieldTimeRemaining / 8000) * 100}%` }}></div>
+            </div>
         )}
-        {game.explosions.map(exp => <div key={exp.id} className="absolute w-12 h-12 pointer-events-none z-20 bg-gradient-to-tr from-orange-600 to-yellow-400 rounded-full blur-sm" style={{ left: `${exp.x - 6}%`, top: `${exp.y - 6}%`, opacity: exp.life / 50, transform: `scale(${0.8 + (42 - exp.life) / 20})` }} />)}
-        
-        <div className="absolute w-14 h-10 z-30 flex items-center justify-center" style={{ left: `${game.playerX - 7}%`, top: '82%' }}>
-            <div className="relative w-full h-full bg-gradient-to-b from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center text-3xl shadow-lg shadow-emerald-900/50">
-                🚀
-                {game.shieldActive && (
-                    <div className="absolute inset-[-18px] border-[4px] border-cyan-400 rounded-full animate-pulse opacity-70 shadow-[0_0_25px_cyan]"></div>
-                )}
-            </div>
-        </div>
-
-        {game.bullets.map(b => <div key={b.id} className="absolute w-1.5 h-6 bg-cyan-400 rounded-full z-40 shadow-[0_0_8px_cyan]" style={{ left: `${b.x - 0.75}%`, top: `${b.y}%` }} />)}
-        {game.enemyBullets.map(eb => <div key={eb.id} className="absolute w-2 h-5 bg-red-500 rounded z-25 shadow-[0_0_8px_red]" style={{ left: `${eb.x - 1}%`, top: `${eb.y}%` }} />)}
-        {game.enemies.map(e => (
-          <div key={e.id} className="absolute flex flex-col items-center justify-center font-black z-10" style={{ left: `${e.x - e.size / 2}%`, top: `${e.y - e.size / 2}%`, width: `${e.size}%`, height: `${e.size}%` }}>
-            <span className={e.type === 'boss' ? 'text-7xl animate-pulse' : 'text-3xl'}>{configs[e.type].emoji}</span>
-            {e.type === 'boss' && <div className="w-full h-2 bg-gray-800 rounded mt-2 border border-white/20 overflow-hidden"><div className="h-full bg-red-500" style={{ width: `${(e.hp / e.maxHp) * 100}%` }} /></div>}
-          </div>
-        ))}
       </div>
 
-      {gameState === 'ready' && (
-        <div className="absolute inset-x-0 bottom-0 top-[68px] bg-black/60 flex flex-col items-center justify-center z-[90] p-6 text-center text-white backdrop-blur-sm">
-          <div className="bg-black/95 p-6 rounded-[28px] w-full max-w-[290px] border border-emerald-500/30 shadow-2xl space-y-5">
-            <div className="text-xl font-black text-emerald-400 uppercase tracking-tighter border-b border-emerald-500/20 pb-2">SOLANA DEFENDER</div>
-            <div className="space-y-3 text-left text-[12px] text-gray-300">
-              <p>🛡️ <span className="text-white font-bold">JUPITER SHIELD:</span> Hold press to activate shield (drains meter).</p>
-              <p>🚀 <span className="text-white font-bold">LASERS:</span> Tap to fire at bots.</p>
-              <p>💎 <span className="text-white font-bold">REWARD:</span> Earn SOL for every block secured.</p>
+      <div ref={containerRef} className="flex-1 relative bg-[radial-gradient(circle_at_50%_50%,#1e1b4b_0%,#000000_100%)]" onPointerMove={(e) => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (rect && gameState === 'playing') dispatch({ type: 'move', x: ((e.clientX - rect.left) / rect.width) * 100 });
+      }}>
+        {game.powerUps.map(p => (
+            <div key={p.id} className="absolute w-10 h-10 flex items-center justify-center animate-bounce z-40" style={{ left: `${p.x - 5}%`, top: `${p.y - 5}%` }}>
+                <div className="w-8 h-8 bg-cyan-500 rounded-lg rotate-45 flex items-center justify-center shadow-[0_0_20px_#22d3ee] border-2 border-white">
+                    <span className="-rotate-45 text-xs font-black text-white">JUP</span>
+                </div>
             </div>
-            <button onClick={startGame} className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm rounded-xl shadow-[0_3px_0_rgb(5,150,105)] active:translate-y-0.5 active:shadow-none transition-all uppercase tracking-widest">INITIALIZE</button>
-          </div>
-        </div>
-      )}
+        ))}
 
-      {gameState === 'levelComplete' && (
-        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[110] p-6 text-center text-white backdrop-blur-md">
-          <div className="bg-gradient-to-b from-emerald-950/80 to-black p-1 rounded-[32px] border border-emerald-400/30 shadow-[0_0_50px_rgba(16,185,129,0.3)] w-full max-w-[340px]">
-            <div className="bg-black/40 px-6 py-8 rounded-[28px] flex flex-col items-center gap-5">
-              <div className="relative">
-                <div className="text-5xl mb-2">🎉</div>
-                <div className="text-3xl font-black text-white uppercase tracking-tighter italic">BLOCK <span className="text-emerald-400">#{(1000 + game.level).toString()}</span></div>
-              </div>
-              <div className="w-full space-y-4 text-left text-xs text-gray-300 italic">
-                <div className="p-3 bg-white/5 rounded-xl border border-white/10">"{levelConfig.fact}"</div>
-                <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10 text-emerald-200/80 leading-snug">{levelConfig.learn}</div>
-              </div>
-              <button onClick={startNextLevel} className="w-full py-4 bg-emerald-500 text-black font-black rounded-2xl uppercase text-sm shadow-[0_5px_0_rgb(5,150,105)] active:translate-y-1 active:shadow-none">MINT NEXT BLOCK</button>
-            </div>
-          </div>
+        <div className="absolute w-16 h-12 z-30 transition-transform duration-75" style={{ left: `${game.playerX - 8}%`, top: '82%' }}>
+            {game.shieldTimeRemaining > 0 && (
+                <div className="absolute inset-[-15px] border-2 border-cyan-400 rounded-full animate-ping opacity-50 shadow-[0_0_30px_cyan]"></div>
+            )}
+            <div className={`text-4xl flex items-center justify-center ${game.shieldTimeRemaining > 0 ? 'drop-shadow-[0_0_15px_rgba(34,211,238,1)]' : ''}`}>🚀</div>
         </div>
-      )}
 
-      {gameState === 'over' && (
-        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[120] text-white p-6 text-center backdrop-blur-md">
-          <div className="bg-gradient-to-b from-red-900/40 to-black p-1 rounded-[32px] border border-red-500/40 w-full max-w-[320px]">
-            <div className="bg-black/60 px-6 py-10 rounded-[28px] flex flex-col items-center gap-6">
-              <div className="text-6xl mb-2">🔌</div>
-              <div className="text-3xl font-black text-white uppercase tracking-tighter leading-none italic">NETWORK <span className="text-red-500">HALTED</span></div>
-              <div className="text-xl font-black">SCORE: {game.score.toLocaleString()}</div>
-              <button onClick={startGame} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-sm shadow-[0_5px_0_rgb(153,27,27)] active:translate-y-1 active:shadow-none">REBOOT CLUSTER</button>
-            </div>
-          </div>
-        </div>
-      )}
+        {game.bullets.map(b => <div key={b.id} className="absolute w-1 h-4 bg-yellow-400 rounded-full shadow-[0_0_8px_yellow]" style={{ left: `${b.x - 0.5}%`, top: `${b.y}%` }} />)}
+        {game.enemyBullets.map(eb => <div key={eb.id} className="absolute w-2 h-2 bg-red-500 rounded-full shadow-[0_0_10px_red]" style={{ left: `${eb.x - 1}%`, top: `${eb.y}%` }} />)}
+        {game.enemies.map(e => <div key={e.id} className="absolute text-2xl" style={{ left: `${e.x - 4}%`, top: `${e.y - 4}%` }}>{configs[e.type].emoji}</div>)}
+        {game.explosions.map(exp => <div key={exp.id} className="absolute w-8 h-8 bg-white rounded-full blur-md opacity-50 scale-150" style={{ left: `${exp.x - 4}%`, top: `${exp.y - 4}%`, transform: `scale(${1 + (30 - exp.life) / 10})` }} />)}
+      </div>
 
-      {game.levelIntroStart > 0 && (
-        <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center z-[130] text-white p-8 text-center">
-          <div className="text-2xl font-black text-emerald-400 mb-2 uppercase tracking-widest">LEVEL {game.level}</div>
-          <div className="text-lg font-bold mb-4 uppercase text-gray-500 tracking-tighter">{levelConfig.title}</div>
-          <div className="text-6xl font-black text-yellow-400 animate-bounce">{countdown || 'GO!'}</div>
-        </div>
-      )}
-
-      {game.showPauseMenu && (
-        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-[200] backdrop-blur-sm">
-          <div className="text-4xl font-black text-emerald-400 italic mb-8 uppercase tracking-tighter">NODE PAUSED</div>
-          <button 
-            onClick={() => dispatch({ type: 'togglePause' })}
-            className="px-12 py-4 bg-emerald-500 text-black font-black rounded-2xl uppercase tracking-widest shadow-[0_4px_0_rgb(5,150,105)]"
-          >
-            RESUME
-          </button>
+      {gameState !== 'playing' && (
+        <div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center">
+            <h2 className="text-4xl font-black text-white italic mb-4">
+                {gameState === 'ready' ? 'START MISSION' : gameState === 'over' ? 'NODE DOWN' : 'BLOCK SECURED'}
+            </h2>
+            <p className="text-cyan-400 mb-8 font-bold tracking-widest uppercase">
+                {gameState === 'ready' ? 'Catch JUP crystals for shields' : `Score: ${game.score}`}
+            </p>
+            <button 
+                onClick={gameState === 'levelComplete' ? startNextLevel : startGame}
+                className="w-full py-4 bg-cyan-500 text-black font-black rounded-xl uppercase tracking-widest shadow-[0_5px_0_#0891b2] active:translate-y-1 active:shadow-none transition-all"
+            >
+                {gameState === 'levelComplete' ? 'NEXT BLOCK' : 'INITIALIZE'}
+            </button>
         </div>
       )}
     </div>
