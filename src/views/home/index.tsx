@@ -405,6 +405,32 @@ const GameSandbox: FC = () => {
       {(gameState === 'ready' || gameState === 'over' || gameState === 'levelComplete') && (
         <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] p-6 text-center text-white backdrop-blur-sm">
           <div className="bg-black/95 p-6 rounded-[28px] w-full max-w-[290px] border border-emerald-500/30 shadow-2xl space-y-5">
+            <div className="text-xl font-black text-emerald-400 uppercase tracking-tighter border-b border-emerald-500/20 pb-2 italic">
+              {gameState === 'ready' ? 'SOLANA DEFENDER' : gameState === 'over' ? 'NETWORK HALTED' : 'BLOCK SECURED'}
+            </div>
+            {gameState === 'ready' && (
+               <div className="space-y-3 text-left text-[11px] text-gray-300 leading-tight">
+                 <p>🛡️ <span className="text-white font-bold uppercase">Jupiter Shield:</span> Catch falling crystals to activate aura.</p>
+                 <p>🚀 <span className="text-white font-bold uppercase">Lasers:</span> Tap to fire at malicious bots.</p>
+                 <p>💎 <span className="text-white font-bold uppercase">Reward:</span> Earn SOL for every block secured.</p>
+               </div>
+            )}
+            {gameState === 'levelComplete' && (
+               <div className="w-full space-y-3 text-left text-[10px] text-gray-300 italic">
+                 <div className="p-2 bg-white/5 rounded-lg border border-white/10">"{levelConfig.fact}"</div>
+                 <div className="p-2 bg-emerald-500/5 rounded-lg border border-emerald-500/10 text-emerald-200/80 leading-snug">{levelConfig.learn}</div>
+               </div>
+            )}
+            <button onClick={gameState === 'levelComplete' ? startNextLevel : startGame} className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm rounded-xl shadow-[0_3px_0_rgb(5,150,105)] transition-all uppercase tracking-widest active:translate-y-1">
+               {gameState === 'ready' ? 'INITIALIZE' : gameState === 'levelComplete' ? 'NEXT BLOCK' : 'REBOOT'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {game.levelIntroStart > 0 && (
+        <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center z-[300] text-white p-8 text-center">
+          <div className="text-xl font-black text-emerald-400 mb-1 uppercase tracking-widest">LEVEL {game.level}</div>
           <div className="text-sm font-bold mb-4 uppercase text-gray-500 tracking-tighter">{levelConfig.title}</div>
           <div className="text-5xl font-black text-yellow-400 animate-bounce">{countdown || 'GO!'}</div>
         </div>
@@ -412,3 +438,4 @@ const GameSandbox: FC = () => {
     </div>
   );
 };
+
